@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset='utf-8' />
+    <link rel="stylesheet" href="style.css">
+    <!-- Vertex Shader script in GLSL -->
+    <script id="vertex-shader" type="x-shader/x-vertex">
+      attribute vec3 position;
+      attribute vec3 normal;
+      attribute vec3 color;
+      attribute vec2 texcoords;
+
+      varying vec3 vColor;
+      varying vec3 vNormal;
+      varying vec3 vEye;
+      varying vec3 vLight;
+      varying vec3 vLightAxis;
+      varying vec3 vLightWorld;
+      varying vec2 vTexCoords;
+
+      uniform mat4 viewMatrix;
+      uniform mat4 modelMatrix;
+      uniform mat4 projectionMatrix;
+
+      struct LightVertexInfo {
+        vec3 position;
+        vec3 direction;
+        int type;
+      };
+
+      uniform LightVertexInfo LightVertex[4];
+
+     void main(void) 
+      {
+        vec4 p = vec4(position, 1.0);
+        mat4 vm = viewMatrix * modelMatrix;
+        mat4 pvm = projectionMatrix * vm;
+
+        // Light Type : DIRECTIONAL
+        if (LightVertex[0].type == 0) 
+        {
+          vLight = -normalize((viewMatrix * vec4(LightVertex[0].direction, 0)).xyz);
+        } 
+        // Light Type : POINT && SPOT
+        else if (LightVertex[0].type == 1 || LightVertex[0].type == 2) 
+        {
+          vec4 mp = modelMatrix * p;
+          vec4 lt = vec4(LightVertex[0].position, 1.0) - mp;
+          vLight = normalize(viewMatrix * lt).xyz;
+          vLightAxis = normalize(viewMatrix * vec4(LightVertex[0].direction, 0.0)).xyz;
+          vLightWorld = lt.xyz;
+        }
+
+        // Surface normal (We're assuming no scaling)
+        vNormal = normalize((vm * vec4(normal, 0.0)).xyz);
+
+        // Eye vector
+        vEye = -normalize(vm * p).xyz;
+        
+        // Texture coordinates
+        vTexCoords = texcoords;
+
+        // Vertex colour
+        vColor = color;
+
+        // Projected vertex position
+        gl_Position = pvm * p;
+      }
+    </script>
+
+    <!-- Fragment Shader script in GLSL -->
+    <script id="fragment-shader" type="x-shader/x-vertex">
+    	precision mediump float;
+
+      // Passed from vertex shader
+      varying vec3 vColor;
+      varying vec3 vNormal;
+      varying vec3 vEye;
+      varying vec3 vLight;
+      varying vec3 vLightAxis;
+      varying vec3 vLightWorld;
+      varying vec2 vTexCoords;
+
+      // Material information
+      uniform float uShininess;
+      uniform vec3 uAmbient;
+      uniform vec3 uDiffuse;
+      uniform vec3 uSpecular;
+      uniform sampler2D uTexture_0;
+
+      // Light information structure
+      struct LightFragmentInfo {
+        int type;
+        int attenuation;
+
+        float alpha, beta;
+
+        vec3 ambient;
+        vec3 diffuse;
+        vec3 specular;
+      };
+
+      uniform LightFragmentInfo LightFragment[4];
+
+      float invPi = 0.31830988618;
+      float inv2Pi = 0.15915494309;
+
+		  void main(void) 
+		  {
+        vec3 vnLight = normalize(vLight);
+        float vLightDistance = length(vLightWorld);
+
+        // Compute attenuation
+        float attenuation = 1.0;
+
+        if (LightFragment[0].type == 1 || LightFragment[0].type == 2) {
+          if (LightFragment[0].attenuation == 1) {
+            attenuation = 1.0 / vLightDistance;
+          } else if (LightFragment[0].attenuation == 2) {
+            attenuation = 1.0 / (vLightDistance * vLightDistance);
+          }
+        }
+
+        if (LightFragment[0].type == 2) 
+        {
+          float coneAngle = dot(vnLight, -normalize(vLightAxis));
+          coneAngle = max(LightFragment[0].beta, min(LightFragment[0].alpha, coneAngle));
+          coneAngle = (coneAngle - LightFragment[0].beta) / (LightFragment[0].alpha - LightFragment[0].beta);
+          attenuation *= coneAngle;
+        }
+      
+        // Compute reflection vector
+        vec3 vReflect = reflect(vnLight, vNormal);
+
+        // Reflectivity of components
+        vec3 ambient = LightFragment[0].ambient * uAmbient;
+        vec3 diffuse = LightFragment[0].diffuse * uDiffuse;
+        vec3 specular = LightFragment[0].specular * uSpecular;
+        vec3 rho = texture2D(uTexture_0, vTexCoords.xy).xyz;
+        
+        // Compute phong specular and lambert diffuse
+        float s = pow(max(dot(vReflect, -vEye), 0.0), uShininess) * (uShininess + 2.0) * inv2Pi;
+        float d = max(dot(vNormal, vnLight), 0.0) * invPi;
+
+        // KB - Color blending has been changed from modulative to additive 
+        //    - Result is saturated to prevent values outside colour valid range
+        //gl_FragColor = vec4(((ambient + d * diffuse + s * specular) * rho * vColor) * attenuation, 1.0);
+        gl_FragColor = vec4(
+          clamp(vColor + ((ambient + diffuse * d + specular * s) * rho * attenuation), vec3(0,0,0), vec3(1,1,1)),
+          1.0
+        );
+      }
+    </script>
+
+    <script type="text/javascript" src="matrix.js"></script>
+    <script type="text/javascript" src="light.js"></script>
+    <script type="text/javascript" src="material.js"></script>
+    <script type="text/javascript" src="model.js"></script>
+    <script type="text/javascript" src="designCamera.js"></script>
+    <script type="text/javascript" src="explorationCamera.js"></script>
+    <script type="text/javascript" src="scene.js"></script>
+    <script type="text/javascript" src="geometry.js"></script>
+    <script type="text/javascript" src="textures.js"></script>
+    <script type="text/javascript" src="map.js"></script>
+    <script type="text/javascript" src="collision.js"></script>
+    <script type="text/javascript" src="room.js"></script>
+    <script type="text/javascript" src="input.js"></script>
+    <script type="text/javascript" src="objects.js"></script>
+    <script type="text/javascript" src="binitool.js"></script>
+</head>
+
+<body style='margin:0px' onload='main()'>
+    <!-- Container for converted images -->
+    <div id="imageCollection" style="height:0; visibility:hidden; display:none;"></div>
+
+    <!-- User Input DIV -->
+    <div id="userInput" style="float: left; max-width: 30%; margin:10px">
+        <div style="height: 50px;"><label id='result'></label></div>
+        <h2 onclick="toggleVisibility('createRoom')" style="margin:10px; padding:5px;">T2 - Room Creation</h2>
+        <div tabindex='0' id="createRoom" style="margin:10px; padding:5px">
+
+            <table id="tblContainer">
+                <tr>
+                    <td><label for="anchorSelection">Room:</label></td>
+                    <td>
+                        <select id="anchorSelection" onchange="createRoomGetWalls()">
+                            <option disabled hidden selected value="undefined">No Anchors Available</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td><label for="wallSelection">Wall:</label></td>
+                    <td>
+                        <select id="wallSelection" onchange="createRoomCheckClamping()" style="width:90%">
+                            <option disabled hidden selected value="undefined">No Anchor Selected</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <td><label for="rname">Name:</label></td>
+                    <td><input type="text" id="rname" name="fname" placeholder="name" value="newRoom"><br></td>
+                </tr>
+                <tr>
+                    <td><label for="rwidth">Width:</label></td>
+                    <td><input type="range" id="rwidth" name="fname" placeholder="width" min="1" max="10" value="5">
+                    </td>
+                </tr>
+                <tr>
+                    <td><label for="rbreadth">Breadth:</label></td>
+                    <td><input type="range" id="rbreadth" name="fname" placeholder="breadth" min="1" max="10" value="5">
+                    </td>
+                </tr>
+            </table>
+
+            <label>Floor: </label><select id="floorMaterial">
+                <option selected value="wood">wood</option>
+                <option value="grass">grass</option>
+                <option value="planks">planks</option>
+                <option value="planks2">planks2</option>
+                <option value="stone">stone</option>
+            </select><br />
+
+            <label>Walls: </label><select id="wallMaterial">
+                <option value="stone">stone</option>
+                <option value="wood">wood</option>
+                <option value="grass">grass</option>
+                <option selected value="planks">planks</option>
+                <option value="planks2">planks2</option>
+            </select><br />
+
+
+            <label for="createRoomShowCeiling">Show Ceiling:</label><input id="createRoomShowCeiling"
+                onchange="createRoomToggleCeiling()" type="checkbox">
+
+            <div id="createRoomCeilingMaterial" style="display: none;">
+                <label>Ceiling: </label><select id="ceilingMaterial">
+                    <option selected value="planks2">planks2</option>
+                    <option value="wood">wood</option>
+                    <option value="grass">grass</option>
+                    <option value="planks">planks</option>
+                    <option value="stone">stone</option>
+                </select>
+            </div>
+            <br />
+
+            <div id="createRoomDoorSize" style="display: none;">
+                <label for="doorWallRatio">Door Size</label>
+                <input type="range" id="doorWallRatio" name="doorWallRatio" min="10" max="90"><br />
+            </div>
+            <button onclick="createRoom()">Create Room</button><br />
+        </div>
+        <hr />
+
+
+        <h2 onclick="toggleVisibility('addDoor')" style="margin:10px; padding:5px;">T3a - Add Doors</h2>
+        <div tabindex='0' id="addDoor" style="margin:10px; padding:5px; display: none;">
+
+            <select id="roomSelection" onchange="addDoorGetWalls()">
+                <option disabled hidden selected value="undefined">No Space Left</option>
+            </select></br>
+
+            <select id="wallSelection">
+                <option disabled hidden selected value="undefined">No Room Selected</option>
+            </select></br>
+
+            <label>Material: </label>
+            <select id="doorWallMaterial">
+                <option selected value="stone">stone</option>
+                <option value="wood">wood</option>
+                <option value="grass">grass</option>
+                <option value="planks">planks</option>
+                <option value="planks2">planks2</option>
+            </select><br />
+
+            <label for="doorWallRatio">Door Size</label>
+            <input type="range" id="doorWallRatio" name="doorWallRatio" min="10" max="90"><br />
+
+            <button onclick="addDoor()">Add Door</button><br />
+
+        </div>
+        <hr />
+
+        <h2 onclick="toggleVisibility('addWindow')" style="margin:10px; padding:5px;">T3b - Add Windows</h2>
+        <div tabindex='0' id="addWindow" style="margin:10px; padding:5px; display: none;">
+            <select id="roomSelection" onchange="addWindowGetWalls()">
+                <option disabled hidden selected value="undefined">No Space Left</option>
+            </select></br>
+
+            <select id="wallSelection">
+                <option disabled hidden selected value="undefined">No Room Selected</option>
+            </select></br>
+
+            <label>Material: </label>
+            <select id="windowWallMaterial">
+                <option selected value="stone">stone</option>
+                <option value="wood">wood</option>
+                <option value="grass">grass</option>
+                <option value="planks">planks</option>
+                <option value="planks2">planks2</option>
+            </select><br />
+
+            <label for="windowWallRatio">Window Size</label>
+            <input type="range" id="windowWallRatio" name="windowWallRatio" min="10" max="90"><br />
+
+            <button onclick="addWindow()">Add Window</button><br />
+
+        </div>
+        <hr />
+
+        <h2 onclick="toggleVisibility('editRooms')" style="margin:10px; padding:5px;">T4 - Edit Rooms</h2>
+        <div tabindex='0' id="editRooms" style="margin:10px; padding:5px; display: none;">
+
+            <label for="roomSelection">Room:</label>
+            <select id="roomSelection" onchange="editRoomsChangedRoomSelection()">
+                <option disabled hidden selected value="undefined">No Rooms Yet</option>
+            </select></br>
+            <label for="wallSelection">Wall:</label>
+            <select id="wallSelection" onchange="editRoomsUpdateWallOptions()">
+                <option disabled hidden selected value="undefined">No Room Selected</option>
+            </select></br>
+            <!-- Not mentioned in requirements
+      <button disabled onclick="editRoomsDeleteRoom()">Delete Room</button><br /> -->
+
+            <fieldset id="editRoomResizeRoomDiv" style="display:none">
+                <legend>Room Resizing</legend>
+                <input type="text" id="resizeWidth" name="width" placeholder="width"><br>
+                <input type="text" id="resizeBreadth" name="breadth" placeholder="breadth"><br>
+                <button onclick="editRoomsResizeRoom()">Resize</button><br />
+            </fieldset>
+
+            <fieldset id="editRoomChangeAnchorDiv" style="display:none">
+                <legend>Room Movement</legend>
+                <label for="editRoomMoveToAnchor">New Anchor:</label>
+                <select id="editRoomMoveToAnchor" onchange="editRoomsMoveRoomUpdateWalls()">
+                    <option disabled hidden selected value="undefined">No Anchors Available</option>
+                </select></br>
+                <label for="editRoomMoveToWall">Anchor's Wall:</label>
+                <select id="editRoomMoveToWall">
+                    <option disabled hidden selected value="undefined">No Room Selected</option>
+                </select></br>
+
+                <button onclick="editRoomsMoveRoom()">Move</button><br />
+            </fieldset>
+
+
+            <fieldset id="editRoomUpdateMaterials" style="display: none;">
+                <legend>Paint</legend>
+                <label for="editRoomPaintMaterial">Material:</label><br />
+                <select id="editRoomPaintMaterial">
+                    <option selected value="stone">stone</option>
+                    <option value="wood">wood</option>
+                    <option value="grass">grass</option>
+                    <option value="planks">planks</option>
+                    <option value="planks2">planks2</option>
+                </select><br />
+                <button id="editRoomsPaintFloor" style="width:20%; float:left;"
+                    onclick="editRoomsPaintFloor()">Floor</button>
+                <button id="editRoomsPaintCeiling" style="width:25%; float:left;"
+                    onclick="editRoomsPaintCeiling()">Ceiling</button>
+                <button id="editRoomsPaintWall" style="width:35%; float:left;" onclick="editRoomsPaintWall()">Selected
+                    Wall</button>
+            </fieldset>
+
+            <fieldset id="editRoomWallOpenings" style="display: none;">
+                <legend>Wall Openings</legend>
+                <label for="editRoomOpeningRatio">Opening Size:</label><br />
+                <input type="range" id="editRoomOpeningRatio" name="editRoomOpeningRatio" min="20" max="80"><br />
+                <label for="editRoomPositionOffset">Position Offset:</label><br />
+                <input type="range" id="editRoomPositionOffset" name="editRoomPositionOffset" min="25" max="75"><br />
+
+                <button id="editRoomsMakeSolid" disabled style="width:25%; float:left;"
+                    onclick="editRoomsMakeSolid()">Make
+                    Solid</button>
+                <button id="editRoomsMakeDoor" disabled style="width:25%; float:left;"
+                    onclick="editRoomsMakeDoor()">Make
+                    Door</button>
+                <button id="editRoomsMakeWindow" disabled style="width:30%; float:left;"
+                    onclick="editRoomsMakeWindow()">Make
+                    Window</button>
+            </fieldset>
+        </div>
+        <hr />
+
+        <h2 onclick="toggleVisibility('roomObjects')" style="margin:10px; padding:5px;">T5 - Place Objects</h2>
+        <div tabindex='0' id="roomObjects" style="margin:10px; padding:5px; display: none;">
+            <select id="roomSelection" onchange="roomObjectsModifyGetObjects()">
+                <option disabled hidden selected value="undefined">No Room Available</option>
+            </select></br>
+
+            <fieldset>
+                <legend>Create</legend>
+                <label>Object: </label>
+                <select id="createObjectChoice">
+                    <option disabled hidden selected value="undefined">Catalogue Empty</option>
+                </select><br />
+
+                <label for="createObjectLocation">Location (x,y,z) Zero at center:</label>
+                <input type="text" id="createObjectLocation" name="createObjectLocation" placeholder="x,y,z"
+                    value='0,0,0'><br />
+
+                <button onclick="roomObjectsCreateObject()">Create Object</button><br />
+            </fieldset>
+            <fieldset>
+                <legend>Modify</legend>
+                <select id="objectIdSelection">
+                    <option disabled hidden selected value="undefined">No Objects Found</option>
+                </select></br>
+
+                <label for="roomObjectsModifyScale">Scale (x,y,z):</label>
+                <input type="text" id="roomObjectsModifyScale" name="roomObjectsModifyScale" placeholder="x,y,z"
+                    value="1,1,1"><br />
+
+                <label for="roomObjectsModifyTranslate">Translate (x,y,z):</label>
+                <input type="text" id="roomObjectsModifyTranslate" name="roomObjectsModifyTranslate" placeholder="x,y,z"
+                    value="0,0,0"><br />
+
+                <label for="roomObjectsModifyRotate">Rotate (x,y,z):</label>
+                <input type="text" id="roomObjectsModifyRotate" name="roomObjectsModifyRotate"
+                    placeholder="Angle (Degrees)" value="0"><br />
+
+                <button onclick="roomObjectsModifyObject()">Modify Object</button><br />
+            </fieldset>
+        </div>
+        <hr />
+        <h2 onclick="toggleVisibility('exploration')" style="margin:10px; padding:5px;">T8 - Exploration</h2>
+        <div tabindex='0' id="exploration" style="margin:10px; padding:5px; display: none;">
+            <button onclick="explorationToggle()">Toggle Exploration</button><br />
+            <button onclick="explorationFreeToggle()">Toggle Free Mode</button><br />
+            <select id="explorationSkyBox" onchange="explorationChangeSkybox()">
+                <option value="sky_morn">morning</option>
+                <option selected value="sky_noon">noon</option>
+                <option value="sky_dusk">dusk</option>
+                <option value="sky_night">night</option>
+            </select><br />
+            <label>WASD to move.</label><br />
+            <label>Roam: Space = Up; Shift = Down</label>
+        </div>
+        <hr />
+    </div>
+    </div>
+
+    <!-- Canvas DIV -->
+    <div style="float: left;">
+        <canvas tabindex='1' id='canvas-cg-lab' style='position: absolute; background-color: black;'>
+        </canvas>
+    </div>
+    <hr />
+    </div>
+
+</body>
+
+</html>

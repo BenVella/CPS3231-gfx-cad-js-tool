@@ -1,0 +1,39 @@
+html * {
+  font-size: 1em !important;
+  color: rgb(44, 44, 44) !important;
+  font-family: Arial !important;
+}
+
+#roomCreation {
+  align-content: center;
+}
+
+select, input, button {
+  margin: 5px;
+  padding: 2px;
+}
+
+#tblContainer.tr.td {
+  align-content: center;
+  width: 80%;
+}
+
+button {
+  border: 1px solid #0066cc;
+  background-color: #31cbff;
+  color: #ffffff;
+  padding: 5px 10px;
+}
+
+button:hover {
+  border: 1px solid #0099cc;
+  background-color: #81eaff;
+  color: #ffffff;
+  padding: 5px 10px;
+}
+
+button:disabled, button[disabled] {
+  border: 1px solid #999999;
+  background-color: #cccccc;
+  color: #666666;
+}
